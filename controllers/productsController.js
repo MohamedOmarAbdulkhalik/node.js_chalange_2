@@ -1,237 +1,258 @@
-// In-memory storage for products (temporary solution)
-let products = [
-  {
-    id: 1,
-    name: "Laptop",
-    category: "Electronics",
-    price: 999.99,
-    description: "High-performance laptop for professionals",
-    inStock: true,
-  },
-  {
-    id: 2,
-    name: "Smartphone",
-    category: "Electronics",
-    price: 699.99,
-    description: "Latest smartphone with advanced features",
-    inStock: true,
-  },
-  {
-    id: 3,
-    name: "Coffee Maker",
-    category: "Home Appliances",
-    price: 149.99,
-    description: "Automatic coffee maker for your kitchen",
-    inStock: false,
-  },
-];
+const Product = require('../models/productModel');
 
-// Utility function to generate unique ID
-const generateId = () => {
-  return products.length > 0 ? Math.max(...products.map((p) => p.id)) + 1 : 1;
+// @desc    Get all products
+// @route   GET /api/products
+// @access  Public
+const getAllProducts = async (req, res) => {
+    try {
+        // Build query object for filtering
+        let query = {};
+        
+        // Filter by category if provided
+        if (req.query.category) {
+            query.category = { $regex: req.query.category, $options: 'i' }; // Case insensitive
+        }
+        
+        // Filter by name if provided
+        if (req.query.name) {
+            query.name = { $regex: req.query.name, $options: 'i' };
+        }
+        
+        // Filter by inStock status if provided
+        if (req.query.inStock) {
+            query.inStock = req.query.inStock.toLowerCase() === 'true';
+        }
+        
+        // Filter by price range if provided
+        if (req.query.minPrice || req.query.maxPrice) {
+            query.price = {};
+            if (req.query.minPrice) query.price.$gte = parseFloat(req.query.minPrice);
+            if (req.query.maxPrice) query.price.$lte = parseFloat(req.query.maxPrice);
+        }
+        
+        // Execute query with Mongoose
+        const products = await Product.find(query).sort({ createdAt: -1 }); // Sort by newest first
+        
+        res.status(200).json({
+            success: true,
+            count: products.length,
+            data: products
+        });
+        
+    } catch (error) {
+        console.error('❌ Get all products error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error retrieving products from database',
+            error: error.message
+        });
+    }
 };
 
-// Get all products with optional filtering
-const getAllProducts = (req, res) => {
-  try {
-    let filteredProducts = [...products];
-
-    // Filter by category if provided in query string
-    if (req.query.category) {
-      filteredProducts = filteredProducts.filter((product) =>
-        product.category
-          .toLowerCase()
-          .includes(req.query.category.toLowerCase())
-      );
+// @desc    Get single product by ID
+// @route   GET /api/products/:id
+// @access  Public
+const getSingleProduct = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        
+        // Validate if ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid product ID format'
+            });
+        }
+        
+        const product = await Product.findById(productId);
+        
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: `Product with ID ${productId} not found`
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            data: product
+        });
+        
+    } catch (error) {
+        console.error('❌ Get single product error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error retrieving product from database',
+            error: error.message
+        });
     }
-
-    // Filter by name if provided in query string
-    if (req.query.name) {
-      filteredProducts = filteredProducts.filter((product) =>
-        product.name.toLowerCase().includes(req.query.name.toLowerCase())
-      );
-    }
-
-    // Filter by inStock status if provided
-    if (req.query.inStock) {
-      const inStock = req.query.inStock.toLowerCase() === "true";
-      filteredProducts = filteredProducts.filter(
-        (product) => product.inStock === inStock
-      );
-    }
-
-    res.json({
-      success: true,
-      count: filteredProducts.length,
-      data: filteredProducts,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error retrieving products",
-      error: error.message,
-    });
-  }
 };
 
-// Get single product by ID
-const getSingleProduct = (req, res) => {
-  try {
-    const productId = parseInt(req.params.id);
-    const product = products.find((p) => p.id === productId);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: `Product with ID ${productId} not found`,
-      });
+// @desc    Create a new product
+// @route   POST /api/products
+// @access  Public
+const createProduct = async (req, res) => {
+    try {
+        const { name, price, description, category, inStock } = req.body;
+        
+        // Basic validation (Mongoose schema will also validate)
+        if (!name || !price || !category) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name, price, and category are required fields'
+            });
+        }
+        
+        // Create product using Mongoose
+        const newProduct = new Product({
+            name,
+            price: parseFloat(price),
+            description: description || '',
+            category,
+            inStock: inStock !== undefined ? inStock : true
+        });
+        
+        // Save to database
+        const savedProduct = await newProduct.save();
+        
+        res.status(201).json({
+            success: true,
+            message: 'Product created successfully',
+            data: savedProduct
+        });
+        
+    } catch (error) {
+        console.error('❌ Create product error:', error);
+        
+        // Handle Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: errors
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Error creating product in database',
+            error: error.message
+        });
     }
-
-    res.json({
-      success: true,
-      data: product,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error retrieving product",
-      error: error.message,
-    });
-  }
 };
 
-// Create a new product
-const createProduct = (req, res) => {
-  try {
-    const { name, category, price, description, inStock } = req.body;
-
-    // Basic validation
-    if (!name || !category || !price) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, category, and price are required fields",
-      });
+// @desc    Update an existing product
+// @route   PUT /api/products/:id
+// @access  Public
+const updateProduct = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        
+        // Validate if ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid product ID format'
+            });
+        }
+        
+        // Check if product exists
+        const existingProduct = await Product.findById(productId);
+        if (!existingProduct) {
+            return res.status(404).json({
+                success: false,
+                message: `Product with ID ${productId} not found`
+            });
+        }
+        
+        // Update product using findByIdAndUpdate
+        const updatedProduct = await Product.findByIdAndUpdate(
+            productId,
+            { 
+                ...req.body,
+                updatedAt: Date.now() // Force update timestamp
+            },
+            { 
+                new: true, // Return updated document
+                runValidators: true // Run schema validations on update
+            }
+        );
+        
+        res.status(200).json({
+            success: true,
+            message: 'Product updated successfully',
+            data: updatedProduct
+        });
+        
+    } catch (error) {
+        console.error('❌ Update product error:', error);
+        
+        // Handle Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: errors
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Error updating product in database',
+            error: error.message
+        });
     }
-
-    if (typeof price !== "number" || price <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Price must be a positive number",
-      });
-    }
-
-    // Create new product object
-    const newProduct = {
-      id: generateId(),
-      name,
-      category,
-      price,
-      description: description || "",
-      inStock: inStock !== undefined ? inStock : true,
-    };
-
-    // Add to products array
-    products.push(newProduct);
-
-    res.status(201).json({
-      success: true,
-      message: "Product created successfully",
-      data: newProduct,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error creating product",
-      error: error.message,
-    });
-  }
 };
 
-// Update an existing product
-const updateProduct = (req, res) => {
-  try {
-    const productId = parseInt(req.params.id);
-    const { name, category, price, description, inStock } = req.body;
-
-    // Find product index
-    const productIndex = products.findIndex((p) => p.id === productId);
-
-    if (productIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: `Product with ID ${productId} not found`,
-      });
+// @desc    Delete a product
+// @route   DELETE /api/products/:id
+// @access  Public
+const deleteProduct = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        
+        // Validate if ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid product ID format'
+            });
+        }
+        
+        const deletedProduct = await Product.findByIdAndDelete(productId);
+        
+        if (!deletedProduct) {
+            return res.status(404).json({
+                success: false,
+                message: `Product with ID ${productId} not found`
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Product deleted successfully',
+            data: deletedProduct
+        });
+        
+    } catch (error) {
+        console.error('❌ Delete product error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting product from database',
+            error: error.message
+        });
     }
-
-    // Update product - only update provided fields
-    const updatedProduct = {
-      ...products[productIndex],
-      ...(name !== undefined && { name }),
-      ...(category !== undefined && { category }),
-      ...(price !== undefined && { price }),
-      ...(description !== undefined && { description }),
-      ...(inStock !== undefined && { inStock }),
-    };
-
-    // Validate price if provided
-    if (price !== undefined && (typeof price !== "number" || price <= 0)) {
-      return res.status(400).json({
-        success: false,
-        message: "Price must be a positive number",
-      });
-    }
-
-    products[productIndex] = updatedProduct;
-
-    res.json({
-      success: true,
-      message: "Product updated successfully",
-      data: updatedProduct,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error updating product",
-      error: error.message,
-    });
-  }
 };
 
-// Delete a product
-const deleteProduct = (req, res) => {
-  try {
-    const productId = parseInt(req.params.id);
-    const productIndex = products.findIndex((p) => p.id === productId);
+// Import mongoose for ObjectId validation
+const mongoose = require('mongoose');
 
-    if (productIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: `Product with ID ${productId} not found`,
-      });
-    }
-
-    // Remove product from array
-    const deletedProduct = products.splice(productIndex, 1)[0];
-
-    res.json({
-      success: true,
-      message: "Product deleted successfully",
-      data: deletedProduct,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error deleting product",
-      error: error.message,
-    });
-  }
-};
-
-// Export all controller functions
 module.exports = {
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  getAllProducts,
-  getSingleProduct,
+    getAllProducts,
+    getSingleProduct,
+    createProduct,
+    updateProduct,
+    deleteProduct
 };
