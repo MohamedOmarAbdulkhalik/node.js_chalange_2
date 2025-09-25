@@ -19,6 +19,9 @@
   },
   "homepage": "https://github.com/MohamedOmarAbdulkhalik/node.js_chalange_2#readme",
   "dependencies": {
-    "express": "^5.1.0"
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "mongoose": "^8.18.2",
+    "morgan": "^1.10.1"
   }
 }
