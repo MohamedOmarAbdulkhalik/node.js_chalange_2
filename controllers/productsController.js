@@ -1,4 +1,6 @@
 const Product = require('../models/productModel');
+const mongoose = require('mongoose');
+const { validationResult } = require('express-validator');
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -90,30 +92,72 @@ const getSingleProduct = async (req, res) => {
 
 // @desc    Create a new product
 // @route   POST /api/products
-// @access  Public
+// @access  Private
 const createProduct = async (req, res) => {
     try {
+        // Check for validation errors from express-validator middleware
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array().map(error => ({
+                    field: error.param,
+                    message: error.msg,
+                    value: error.value
+                }))
+            });
+        }
+
         const { name, price, description, category, inStock } = req.body;
         
-        // Basic validation (Mongoose schema will also validate)
+        // Additional server-side validation (backup to express-validator)
         if (!name || !price || !category) {
             return res.status(400).json({
                 success: false,
                 message: 'Name, price, and category are required fields'
             });
         }
+
+        // Validate price is a positive number
+        if (isNaN(price) || parseFloat(price) < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Price must be a positive number'
+            });
+        }
+
+        // Validate category is one of the allowed values
+        const allowedCategories = ['Electronics', 'Clothing', 'Books', 'Home', 'Sports', 'Other'];
+        if (!allowedCategories.includes(category)) {
+            return res.status(400).json({
+                success: false,
+                message: `Category must be one of: ${allowedCategories.join(', ')}`
+            });
+        }
         
         // Create product using Mongoose
         const newProduct = new Product({
-            name,
+            name: name.trim(),
             price: parseFloat(price),
-            description: description || '',
+            description: description ? description.trim() : '',
             category,
             inStock: inStock !== undefined ? inStock : true
         });
         
         // Save to database
         const savedProduct = await newProduct.save();
+
+        // Emit real-time notification if Socket.io is available
+        if (req.app.get('io')) {
+            req.app.get('io').emit('newProduct', {
+                type: 'product_created',
+                message: `New product created: ${savedProduct.name}`,
+                product: savedProduct,
+                timestamp: new Date().toISOString(),
+                user: req.user ? req.user.name : 'System'
+            });
+        }
         
         res.status(201).json({
             success: true,
@@ -133,6 +177,14 @@ const createProduct = async (req, res) => {
                 errors: errors
             });
         }
+
+        // Handle duplicate key errors (if any unique constraints)
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product with this name already exists'
+            });
+        }
         
         res.status(500).json({
             success: false,
@@ -144,9 +196,23 @@ const createProduct = async (req, res) => {
 
 // @desc    Update an existing product
 // @route   PUT /api/products/:id
-// @access  Public
+// @access  Private
 const updateProduct = async (req, res) => {
     try {
+        // Check for validation errors from express-validator middleware
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array().map(error => ({
+                    field: error.param,
+                    message: error.msg,
+                    value: error.value
+                }))
+            });
+        }
+
         const productId = req.params.id;
         
         // Validate if ID is a valid MongoDB ObjectId
@@ -165,19 +231,53 @@ const updateProduct = async (req, res) => {
                 message: `Product with ID ${productId} not found`
             });
         }
+
+        // Validate price if provided in update
+        if (req.body.price && (isNaN(req.body.price) || parseFloat(req.body.price) < 0)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Price must be a positive number'
+            });
+        }
+
+        // Validate category if provided in update
+        if (req.body.category) {
+            const allowedCategories = ['Electronics', 'Clothing', 'Books', 'Home', 'Sports', 'Other'];
+            if (!allowedCategories.includes(req.body.category)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Category must be one of: ${allowedCategories.join(', ')}`
+                });
+            }
+        }
         
+        // Prepare update data
+        const updateData = { ...req.body };
+        if (updateData.name) updateData.name = updateData.name.trim();
+        if (updateData.description) updateData.description = updateData.description.trim();
+        if (updateData.price) updateData.price = parseFloat(updateData.price);
+        updateData.updatedAt = Date.now();
+
         // Update product using findByIdAndUpdate
         const updatedProduct = await Product.findByIdAndUpdate(
             productId,
-            { 
-                ...req.body,
-                updatedAt: Date.now() // Force update timestamp
-            },
+            updateData,
             { 
                 new: true, // Return updated document
                 runValidators: true // Run schema validations on update
             }
         );
+
+        // Emit real-time notification if Socket.io is available
+        if (req.app.get('io')) {
+            req.app.get('io').emit('productUpdated', {
+                type: 'product_updated',
+                message: `Product updated: ${updatedProduct.name}`,
+                product: updatedProduct,
+                timestamp: new Date().toISOString(),
+                user: req.user ? req.user.name : 'System'
+            });
+        }
         
         res.status(200).json({
             success: true,
@@ -208,7 +308,7 @@ const updateProduct = async (req, res) => {
 
 // @desc    Delete a product
 // @route   DELETE /api/products/:id
-// @access  Public
+// @access  Private/Admin
 const deleteProduct = async (req, res) => {
     try {
         const productId = req.params.id;
@@ -229,6 +329,17 @@ const deleteProduct = async (req, res) => {
                 message: `Product with ID ${productId} not found`
             });
         }
+
+        // Emit real-time notification if Socket.io is available
+        if (req.app.get('io')) {
+            req.app.get('io').emit('productDeleted', {
+                type: 'product_deleted',
+                message: `Product deleted: ${deletedProduct.name}`,
+                productId: productId,
+                timestamp: new Date().toISOString(),
+                user: req.user ? req.user.name : 'System'
+            });
+        }
         
         res.status(200).json({
             success: true,
@@ -246,9 +357,7 @@ const deleteProduct = async (req, res) => {
     }
 };
 
-// Import mongoose for ObjectId validation
-const mongoose = require('mongoose');
-
+// Export controller functions
 module.exports = {
     getAllProducts,
     getSingleProduct,

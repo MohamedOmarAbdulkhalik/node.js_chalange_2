@@ -4,6 +4,7 @@ const morgan = require('morgan');
 require('dotenv').config(); // Load environment variables
 
 const productRoutes = require('./routes/productsRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,7 +41,7 @@ const connectDB = async () => {
 
 // Routes
 app.use('/api/products', productRoutes);
-
+app.use('/api/auth', authRoutes); 
 // Basic error handling middleware
 app.use((err, req, res, next) => {
     console.error('❌ Error:', err.stack);
