@@ -1,4 +1,5 @@
 const User = require('../models/userModel');
+const { generateToken } = require('../utils/jwtUtils');
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -27,7 +28,10 @@ const registerUser = async (req, res) => {
         // Save user to database
         await user.save();
 
-        // Return user data (without password)
+        // Generate JWT token
+        const token = generateToken(user._id);
+
+        // Return user data with token
         const userResponse = {
             id: user._id,
             name: user.name,
@@ -39,13 +43,13 @@ const registerUser = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
+            token,
             data: userResponse
         });
 
     } catch (error) {
         console.error('❌ User registration error:', error);
         
-        // Handle duplicate email error
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
@@ -53,7 +57,6 @@ const registerUser = async (req, res) => {
             });
         }
         
-        // Handle validation errors
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
             return res.status(400).json({
@@ -97,8 +100,10 @@ const loginUser = async (req, res) => {
             });
         }
 
-        // Generate JWT token (we'll implement this in Phase 2)
-        // For now, just return success
+        // Generate JWT token
+        const token = generateToken(user._id);
+
+        // Return user data with token
         const userResponse = {
             id: user._id,
             name: user.name,
@@ -109,6 +114,7 @@ const loginUser = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'Login successful',
+            token,
             data: userResponse
         });
 
@@ -127,7 +133,6 @@ const loginUser = async (req, res) => {
 // @access  Private
 const getCurrentUser = async (req, res) => {
     try {
-        // req.user will be set by the auth middleware (in Phase 2)
         const user = await User.findById(req.user.id);
         
         if (!user) {
