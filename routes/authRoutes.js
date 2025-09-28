@@ -10,6 +10,7 @@ const {
     validateUserLogin,
     handleValidationErrors
 } = require('../middleware/validation');
+const { protect } = require('../middleware/auth'); // Add this import
 
 // @route   POST /api/auth/register
 // @desc    Register a new user
@@ -22,8 +23,6 @@ router.post('/register', validateUserRegistration, handleValidationErrors, regis
 router.post('/login', validateUserLogin, handleValidationErrors, loginUser);
 
 // @route   GET /api/auth/me
-// @desc    Get current user profile
-// @access  Private (will be protected in Phase 2)
-router.get('/me', getCurrentUser);
+router.get('/me', protect, getCurrentUser); // Add protect middleware
 
 module.exports = router;
