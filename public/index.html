@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Products & Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .products-panel {
+            grid-column: 1;
+        }
+        
+        .chat-panel {
+            grid-column: 2;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        h2 {
+            color: #555;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .notification {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 5px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .notification.success {
+            background: #e8f5e8;
+            border-left-color: #4caf50;
+        }
+        
+        .notification.warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+        
+        .notification.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+        
+        .message {
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .message.user {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.system {
+            background: #e9ecef;
+            color: #666;
+            text-align: center;
+            font-style: italic;
+            max-width: 100%;
+        }
+        
+        .message.other {
+            background: white;
+            border: 1px solid #ddd;
+        }
+        
+        .message-header {
+            font-size: 0.8em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .chat-input button {
+            padding: 12px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .chat-input button:hover {
+            background: #0056b3;
+        }
+        
+        .user-info {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .user-info input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .online-count {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .product-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .product-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .product-name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .product-price {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .product-category {
+            background: #6c757d;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            display: inline-block;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Products Panel -->
+        <div class="panel products-panel">
+            <h1>🛍️ Real-Time Products</h1>
+            <div id="notifications"></div>
+            
+            <div class="status">
+                <span>🔔 Real-time notifications are <span id="connectionStatus">active</span></span>
+            </div>
+            
+            <h2>Latest Products</h2>
+            <div id="productList" class="product-list">
+                <div class="notification">
+                    Loading products...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Panel -->
+        <div class="panel chat-panel">
+            <h2>💬 Live Chat</h2>
+            
+            <div class="user-info">
+                <input type="text" id="usernameInput" placeholder="Enter your username" value="User">
+                <button onclick="joinChat()">Join Chat</button>
+            </div>
+            
+            <div class="status">
+                👥 <span id="onlineCount">0</span> users online
+            </div>
+            
+            <div id="chatMessages" class="chat-messages">
+                <div class="message system">
+                    Welcome! Join the chat to start messaging.
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+                <button onclick="sendMessage()" id="sendButton" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Connect to Socket.io server
+        const socket = io();
+        let isConnected = false;
+        let currentUsername = 'User';
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            isConnected = true;
+            updateConnectionStatus(true);
+            
+            // Request online users count
+            socket.emit('getOnlineUsers');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Disconnected from server');
+            isConnected = false;
+            updateConnectionStatus(false);
+        });
+
+        socket.on('newProduct', (data) => {
+            console.log('🆕 New product notification:', data);
+            addNotification({
+                type: 'success',
+                title: 'New Product Added!',
+                message: data.message,
+                product: data.product
+            });
+            
+            // Update product list
+            fetchProducts();
+        });
+
+        socket.on('productUpdated', (data) => {
+            console.log('✏️ Product updated:', data);
+            addNotification({
+                type: 'warning',
+                title: 'Product Updated',
+                message: data.message,
+                product: data.product
+            });
+            
+            fetchProducts();
+        });
+
+        socket.on('productDeleted', (data) => {
+            console.log('🗑️ Product deleted:', data);
+            addNotification({
+                type: 'error',
+                title: 'Product Deleted',
+                message: data.message,
+                productId: data.productId
+            });
+            
+            fetchProducts();
+        });
+
+        socket.on('chatMessage', (data) => {
+            console.log('💬 Chat message received:', data);
+            addChatMessage(data);
+        });
+
+        socket.on('onlineUsersCount', (data) => {
+            document.getElementById('onlineCount').textContent = data.count;
+        });
+
+        // Chat functions
+        function joinChat() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            
+            currentUsername = username;
+            socket.emit('joinChat', { username: currentUsername });
+            
+            // Enable chat input
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('usernameInput').disabled = true;
+            
+            addChatMessage({
+                type: 'system',
+                username: 'System',
+                message: `You joined the chat as ${currentUsername}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            socket.emit('chatMessage', {
+                username: currentUsername,
+                message: message,
+                userId: socket.id
+            });
+            
+            // Clear input
+            messageInput.value = '';
+        }
+
+        // Allow sending message with Enter key
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Helper functions
+        function addNotification(notification) {
+            const notificationsDiv = document.getElementById('notifications');
+            const notificationEl = document.createElement('div');
+            notificationEl.className = `notification ${notification.type}`;
+            
+            let content = `
+                <strong>${notification.title}</strong><br>
+                ${notification.message}
+            `;
+            
+            if (notification.product) {
+                content += `<br><small>Product: ${notification.product.name} - $${notification.product.price}</small>`;
+            }
+            
+            notificationEl.innerHTML = content;
+            notificationsDiv.appendChild(notificationEl);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (notificationEl.parentNode) {
+                    notificationEl.remove();
+                }
+            }, 10000);
+        }
+
+        function addChatMessage(data) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            
+            let messageClass = 'message ';
+            if (data.type === 'system') {
+                messageClass += 'system';
+            } else if (data.username === currentUsername) {
+                messageClass += 'user';
+            } else {
+                messageClass += 'other';
+            }
+            
+            const time = new Date(data.timestamp).toLocaleTimeString();
+            
+            messageEl.className = messageClass;
+            messageEl.innerHTML = `
+                ${data.type !== 'system' ? `<div class="message-header">${data.username} • ${time}</div>` : ''}
+                <div class="message-content">${data.message}</div>
+            `;
+            
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.textContent = connected ? 'active' : 'disconnected';
+            statusEl.style.color = connected ? '#28a745' : '#dc3545';
+        }
+
+        // Fetch products from API
+        async function fetchProducts() {
+            try {
+                const response = await fetch('/api/products');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayProducts(data.data);
+                }
+            } catch (error) {
+                console.error('Error fetching products:', error);
+            }
+        }
+
+        function displayProducts(products) {
+            const productList = document.getElementById('productList');
+            productList.innerHTML = '';
+            
+            if (products.length === 0) {
+                productList.innerHTML = '<div class="notification">No products found</div>';
+                return;
+            }
+            
+            // Show latest 5 products
+            const recentProducts = products.slice(0, 5);
+            
+            recentProducts.forEach(product => {
+                const productEl = document.createElement('div');
+                productEl.className = 'product-item';
+                productEl.innerHTML = `
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-price">$${product.price}</div>
+                    <div class="product-description">${product.description || 'No description'}</div>
+                    <span class="product-category">${product.category}</span>
+                    <div style="margin-top: 5px; font-size: 0.8em; color: #666;">
+                        ${product.inStock ? '✅ In Stock' : '❌ Out of Stock'}
+                    </div>
+                `;
+                productList.appendChild(productEl);
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchProducts();
+            
+            // Update online users count every 30 seconds
+            setInterval(() => {
+                if (isConnected) {
+                    socket.emit('getOnlineUsers');
+                }
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
